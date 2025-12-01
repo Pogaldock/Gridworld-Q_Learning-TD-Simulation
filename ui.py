@@ -41,12 +41,6 @@ def build_grid_gui():
     root = _get_root()
     win = tk.Toplevel(root)
     win.title("Grid Builder - Draw your grid and click DONE when ready")
-    win.lift()
-    win.focus_force()
-    try:
-        win.state("zoomed")  # FULL SCREEN (may fail on some platforms)
-    except Exception:
-        pass
 
     rows, cols = 5, 5
     cell_size = 40
@@ -64,7 +58,7 @@ def build_grid_gui():
     tk.Label(control, text="4. Click DONE when ready", font=("Arial", 9, "bold")).pack(anchor="w", pady=(0, 10))
 
     # Canvas where the grid is drawn
-    canvas = tk.Canvas(win, width=cols * cell_size, height=rows * cell_size)
+    canvas = tk.Canvas(win, bg="white")
     canvas.grid(row=0, column=1, rowspan=15, sticky="nsew")
 
     # allow resizing
@@ -73,19 +67,32 @@ def build_grid_gui():
 
     grid = np.full((rows, cols), ' ', dtype=str)
 
+    def get_cell_size():
+        """Calculate cell size to fit canvas while maintaining aspect ratio."""
+        canvas.update_idletasks()
+        canvas_width = canvas.winfo_width()
+        canvas_height = canvas.winfo_height()
+        if canvas_width <= 1 or canvas_height <= 1:
+            return cell_size
+        size_by_width = canvas_width // cols
+        size_by_height = canvas_height // rows
+        return max(10, min(size_by_width, size_by_height))
+
     def redraw():
         canvas.delete("all")
+        current_cell_size = get_cell_size()
         colors = {" ": "white", "W": "gray", "S": "green", "G": "red"}
         for r in range(rows):
             for c in range(cols):
-                x1, y1 = c * cell_size, r * cell_size
-                x2, y2 = x1 + cell_size, y1 + cell_size
+                x1, y1 = c * current_cell_size, r * current_cell_size
+                x2, y2 = x1 + current_cell_size, y1 + current_cell_size
                 canvas.create_rectangle(x1, y1, x2, y2, fill=colors[grid[r, c]], outline="black")
 
     def on_click(event):
         nonlocal grid
-        c = event.x // cell_size
-        r = event.y // cell_size
+        current_cell_size = get_cell_size()
+        c = event.x // current_cell_size
+        r = event.y // current_cell_size
         if not (0 <= r < rows and 0 <= c < cols):
             return
         tool = current_tool.get()
@@ -104,8 +111,9 @@ def build_grid_gui():
     def on_drag(event):
         """Handle mouse drag painting while left button is held."""
         nonlocal grid
-        c = event.x // cell_size
-        r = event.y // cell_size
+        current_cell_size = get_cell_size()
+        c = event.x // current_cell_size
+        r = event.y // current_cell_size
         if not (0 <= r < rows and 0 <= c < cols):
             return
         tool = current_tool.get()
@@ -139,6 +147,7 @@ def build_grid_gui():
 
     canvas.bind("<Button-1>", on_click)
     canvas.bind("<B1-Motion>", on_drag)
+    canvas.bind("<Configure>", lambda e: redraw())  # Redraw on window resize
 
     # ---------------- control widgets ----------------
     tk.Label(control, text="Tools", font=("Arial", 12, "bold")).pack(anchor="w")
@@ -182,7 +191,6 @@ def build_grid_gui():
                 cmin = min(new.shape[1], grid.shape[1])
                 new[:rmin, :cmin] = grid[:rmin, :cmin]
                 grid = new
-                canvas.config(width=cols * cell_size, height=rows * cell_size)
                 redraw()
         except Exception:
             pass
@@ -218,6 +226,7 @@ def build_grid_gui():
     win.update_idletasks()
     win.update()
     win.deiconify()  # Ensure window is visible
+    win.state("zoomed")  # Maximize window after it's fully initialized
     win.lift()
     win.focus_force()
     
@@ -243,7 +252,7 @@ def parameter_panel(defaults=None):
     root = _get_root()
     panel = tk.Toplevel(root)
     panel.title("RL Parameters")
-    panel.geometry("400x300")
+    panel.state("zoomed")  # Maximize window
     
     # Force window to appear
     panel.update_idletasks()
@@ -252,6 +261,10 @@ def parameter_panel(defaults=None):
     panel.lift()
     panel.focus_force()
     panel.grab_set()
+    
+    # Create a frame to center the content
+    main_frame = tk.Frame(panel)
+    main_frame.pack(expand=True)
 
     labels = {
         "episodes": "Number of episodes",
@@ -267,10 +280,10 @@ def parameter_panel(defaults=None):
     entries = {}
     row = 0
     for key, label in labels.items():
-        tk.Label(panel, text=label, font=("Arial", 12)).grid(row=row, column=0, pady=5, sticky="w")
-        ent = tk.Entry(panel, width=10, font=("Arial", 12))
+        tk.Label(main_frame, text=label, font=("Arial", 16)).grid(row=row, column=0, pady=10, sticky="w", padx=20)
+        ent = tk.Entry(main_frame, width=15, font=("Arial", 16))
         ent.insert(0, str(defaults[key]))
-        ent.grid(row=row, column=1, pady=5, padx=10)
+        ent.grid(row=row, column=1, pady=10, padx=20)
         entries[key] = ent
         row += 1
 
@@ -289,7 +302,7 @@ def parameter_panel(defaults=None):
             params[key] = val
         panel.destroy()
 
-    tk.Button(panel, text="Run", font=("Arial", 12), command=accept).grid(row=row, column=0, columnspan=2, pady=20)
+    tk.Button(main_frame, text="Run", font=("Arial", 16, "bold"), command=accept, bg="lightgreen", width=20, height=2).grid(row=row, column=0, columnspan=2, pady=30)
     panel.wait_window()
     return params
 
@@ -379,20 +392,16 @@ def draw_world(grid: np.ndarray, policy_full: np.ndarray, path_policy: np.ndarra
     plt.show()
 
 
-def animate_episode_comparison(grid: np.ndarray, recorded_paths: dict, bfs_path: List[Tuple[int, int]], final_policy_path: List[Tuple[int, int]], speed=80, max_steps=None):
+def animate_episode_comparison(grid: np.ndarray, recorded_paths: dict, bfs_path: List[Tuple[int, int]], final_policy_path: List[Tuple[int, int]], speed=80, max_steps=None, rerun_callback=None):
     rows, cols = grid.shape
-    cell = 40
     colors = {" ": "white", "W": "gray", "S": "green", "G": "red"}
     episodes = sorted(recorded_paths.keys())
     root = _get_root()
     win = tk.Toplevel(root)
     win.title("Episode Comparison")
+    win.state("zoomed")  # Maximize window
     win.lift()
     win.focus_force()
-    try:
-        win.state("zoomed")
-    except Exception:
-        pass
 
     def _quit_all():
         win.destroy()
@@ -400,7 +409,26 @@ def animate_episode_comparison(grid: np.ndarray, recorded_paths: dict, bfs_path:
         sys.exit()
 
     win.protocol("WM_DELETE_WINDOW", _quit_all)
-    frame = tk.Frame(win); frame.pack(fill="both", expand=True)
+    
+    # Main container with button at top
+    container = tk.Frame(win)
+    container.pack(fill="both", expand=True)
+    
+    # Button frame at the top
+    if rerun_callback:
+        button_frame = tk.Frame(container)
+        button_frame.pack(side="top", fill="x", padx=10, pady=10)
+        
+        def on_rerun():
+            win.destroy()
+            rerun_callback()
+        
+        tk.Button(button_frame, text="Rerun with New Parameters (Keep Same Maze)", 
+                 font=("Arial", 14, "bold"), bg="lightblue", command=on_rerun,
+                 height=2).pack(side="top", pady=5)
+    
+    frame = tk.Frame(container)
+    frame.pack(fill="both", expand=True)
     canvases = {}
     agents = {}
 
@@ -409,9 +437,30 @@ def animate_episode_comparison(grid: np.ndarray, recorded_paths: dict, bfs_path:
     final_found = (len(final_policy_path) > 0 and grid[final_policy_path[-1]] == "G")
     final_policy_steps = len(final_policy_path) - 1 if final_found else None
 
+    def get_canvas_cell_size(canvas, rows, cols):
+        """Calculate cell size for a canvas based on available space."""
+        canvas.update_idletasks()
+        w = canvas.winfo_width()
+        h = canvas.winfo_height()
+        if w <= 1 or h <= 1:
+            return 40
+        return max(10, min(w // cols, h // rows))
+
+    def draw_episode_canvas(canvas, episode_num, rows, cols, grid, colors):
+        """Draw grid on canvas with dynamic cell sizing."""
+        canvas.delete("all")
+        cell = get_canvas_cell_size(canvas, rows, cols)
+        for r in range(rows):
+            for c in range(cols):
+                canvas.create_rectangle(c * cell, r * cell, c * cell + cell, r * cell + cell, 
+                                       fill=colors[grid[r, c]], outline="black")
+        # Create and return agent oval
+        agent = canvas.create_oval(5, 5, cell - 5, cell - 5, fill="cyan", outline="blue", width=2)
+        return agent
+
     for i, ep in enumerate(episodes):
         ep_frame = tk.Frame(frame)
-        ep_frame.grid(row=0, column=i, sticky="nsew", padx=20, pady=20)
+        ep_frame.grid(row=0, column=i, sticky="nsew", padx=10, pady=10)
         frame.grid_columnconfigure(i, weight=1)
         frame.grid_rowconfigure(0, weight=1)
         ep_path = recorded_paths[ep]
@@ -439,22 +488,26 @@ def animate_episode_comparison(grid: np.ndarray, recorded_paths: dict, bfs_path:
             f"Optimal (BFS) path length: {optimal_len_display}\n"
             f"Steps to goal in final policy: {final_policy_steps if final_policy_steps is not None else 'N/A'}"
         )
-        tk.Label(ep_frame, text=info_text, font=("Arial", 12), justify="left").pack()
-        canvas = tk.Canvas(ep_frame, width=cols * cell, height=rows * cell, bg="white", highlightthickness=0)
-        canvas.pack(fill="both", expand=True)
+        tk.Label(ep_frame, text=info_text, font=("Arial", 12), justify="left", wraplength=250, anchor="w").pack(pady=5, padx=5, fill="x")
+        canvas = tk.Canvas(ep_frame, bg="white", highlightthickness=0)
+        canvas.pack(fill="both", expand=True, padx=5, pady=5)
         canvases[ep] = canvas
-        for r in range(rows):
-            for c in range(cols):
-                canvas.create_rectangle(c * cell, r * cell, c * cell + cell, r * cell + cell, fill=colors[grid[r, c]], outline="black")
-        agent = canvas.create_oval(5, 5, cell - 5, cell - 5, fill="cyan", outline="blue", width=2)
+        # Initial draw
+        agent = draw_episode_canvas(canvas, ep, rows, cols, grid, colors)
         agents[ep] = agent
+        # Redraw on resize
+        def on_resize(event, c=canvas, ep_num=ep):
+            agents[ep_num] = draw_episode_canvas(c, ep_num, rows, cols, grid, colors)
+        canvas.bind("<Configure>", on_resize)
 
     def animate_ep(ep, step):
         path = recorded_paths[ep]
         if step >= len(path):
             step = 0
         r, c = path[step]
-        canvases[ep].coords(agents[ep], c * cell + 5, r * cell + 5, c * cell + cell - 5, r * cell + cell - 5)
+        canvas = canvases[ep]
+        cell = get_canvas_cell_size(canvas, rows, cols)
+        canvas.coords(agents[ep], c * cell + 5, r * cell + 5, c * cell + cell - 5, r * cell + cell - 5)
         win.after(speed, lambda: animate_ep(ep, step + 1))
 
     for ep in episodes:

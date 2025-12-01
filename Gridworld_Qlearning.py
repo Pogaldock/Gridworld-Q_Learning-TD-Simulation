@@ -14,28 +14,16 @@ import tkinter as tk
 from tkinter import ttk
 
 
-def main():
-    print("Starting Gridworld Q-Learning Simulation...")
-    root = _get_root()
-    print("Root initialized.")
-    
+def run_simulation(world, root):
+    """Run the simulation with the given world grid."""
     print("Opening parameter panel...")
     params = parameter_panel()
     print(f"Parameters set: {params}")
 
-    USE_DEFAULT = False
-    if USE_DEFAULT:
-        print("Using default grid...")
-        world = load_default_grid()
-    else:
-        print("Opening grid builder...")
-        world = build_grid_gui()
-    print(f"Grid created: {world.shape}")
-
     if not params:
         params = {
-            "episodes": 5000,
-            "max_steps": 100,
+            "episodes": 10000,
+            "max_steps": 200,
             "epsilon": 0.1,
             "alpha": 0.01,
             "gamma": 0.95
@@ -115,8 +103,25 @@ def main():
     draw_world(world, policy_full, path_policy, final_policy_path, q_table=q, actions=actions)
 
     print("Opening episode comparison animation...")
-    animate_episode_comparison(world, recorded_paths, bfs_path, final_policy_path, max_steps=int(params.get("max_steps", 0)))
+    animate_episode_comparison(world, recorded_paths, bfs_path, final_policy_path, max_steps=int(params.get("max_steps", 0)), rerun_callback=lambda: run_simulation(world, root))
 
+
+def main():
+    print("Starting Gridworld Q-Learning Simulation...")
+    root = _get_root()
+    print("Root initialized.")
+    
+    USE_DEFAULT = False
+    if USE_DEFAULT:
+        print("Using default grid...")
+        world = load_default_grid()
+    else:
+        print("Opening grid builder...")
+        world = build_grid_gui()
+    print(f"Grid created: {world.shape}")
+    
+    run_simulation(world, root)
+    
     print("Starting main event loop. Close all windows to exit.")
     tk.mainloop()
     print("Program finished.")
