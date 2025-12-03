@@ -42,8 +42,8 @@ htmlcov/
 Thumbs.db
 
 # Project specific
-*.png
-*.jpg
-*.gif
 results/
 logs/
+
+# Allow assets
+!assets/*.png

@@ -7,17 +7,17 @@ from env import load_default_grid, GridEnvironment
 from agent import RLAgent
 from ui import (
     parameter_panel, build_grid_gui, draw_world,
-    animate_episode_comparison, path_policy_only, show_evaluation_popup,
-    _get_root
+    path_policy_only, show_evaluation_popup,
+    _get_root, TrainingAnimationViewer, show_final_summary
 )
 import tkinter as tk
 from tkinter import ttk
 
 
-def run_simulation(world, root):
+def run_simulation(world, root, previous_params=None):
     """Run the simulation with the given world grid."""
     print("Opening parameter panel...")
-    params = parameter_panel()
+    params = parameter_panel(defaults=previous_params)
     print(f"Parameters set: {params}")
 
     if not params:
@@ -50,37 +50,49 @@ def run_simulation(world, root):
 
     episodes = int(params.get("episodes", 1000))
     print(f"Starting training for {episodes} episodes...")
-
-    # Create a simple loading/progress window while training runs
-    loading = tk.Toplevel(root)
-    loading.title("Training...")
-    loading.geometry("360x100")
-    loading.transient(root)  # keep above
-    loading.lift()
-    loading.focus_force()
-    lbl = tk.Label(loading, text=f"Training... 0/{episodes}", font=("Arial", 11))
-    lbl.pack(pady=(12, 6))
-    progress = ttk.Progressbar(loading, orient="horizontal", length=300, mode="determinate", maximum=episodes)
-    progress.pack(padx=10, pady=(0, 12))
-
+    
+    import time
+    start_time = time.time()
+    last_update = 0
+    
     def progress_cb(done, total):
-        # Update progress bar and label
-        progress['value'] = done
-        lbl.config(text=f"Training... {done}/{total}")
-        # Ensure UI updates while training
-        try:
-            loading.update_idletasks()
-        except Exception:
-            pass
-
-    q, actions, states, recorded_paths = agent.train(episodes=episodes, progress_callback=progress_cb)
-    print("Training complete!")
-
-    # destroy loading window once training is finished
-    try:
-        loading.destroy()
-    except Exception:
-        pass
+        nonlocal last_update
+        current_time = time.time()
+        
+        # Update every 0.5 seconds or on completion
+        if current_time - last_update >= 0.5 or done == total:
+            last_update = current_time
+            percent = (done / total * 100) if total > 0 else 0
+            elapsed = int(current_time - start_time)
+            
+            # Calculate ETA
+            eta_str = ""
+            if done > 0 and done < total:
+                avg_time = elapsed / done
+                remaining = total - done
+                eta_seconds = int(avg_time * remaining)
+                if eta_seconds < 60:
+                    eta_str = f" | ETA: {eta_seconds}s"
+                else:
+                    eta_minutes = eta_seconds // 60
+                    eta_str = f" | ETA: {eta_minutes}m {eta_seconds % 60}s"
+            
+            # Create progress bar
+            bar_length = 40
+            filled = int(bar_length * done / total)
+            bar = '█' * filled + '░' * (bar_length - filled)
+            
+            # Print progress (overwrite previous line)
+            print(f"\r[{bar}] {percent:.1f}% | Episode {done}/{total} | Elapsed: {elapsed}s{eta_str}", end='', flush=True)
+    
+    # Train with all episodes recorded
+    q, actions, states, recorded_paths, epsilon_values = agent.train(
+        episodes=episodes, 
+        progress_callback=progress_cb,
+        record_all=True
+    )
+    
+    print("\n✓ Training complete!")
 
     print("Extracting policy and paths...")
     policy_full = agent.extract_policy()
@@ -99,11 +111,15 @@ def run_simulation(world, root):
     # Show evaluation summary in a popup rather than console
     show_evaluation_popup(eval_stats, bfs_length, final_policy_steps, eval_trials)
 
+    print("Opening interactive training animation viewer...")
+    viewer = TrainingAnimationViewer(world, recorded_paths, epsilon_values, max_steps=int(params.get("max_steps", 0)), animation_speed=50, bfs_length=bfs_length)
+    viewer.win.wait_window()
+
     print("Opening world visualization (matplotlib)...")
     draw_world(world, policy_full, path_policy, final_policy_path, q_table=q, actions=actions)
 
-    print("Opening episode comparison animation...")
-    animate_episode_comparison(world, recorded_paths, bfs_path, final_policy_path, max_steps=int(params.get("max_steps", 0)), rerun_callback=lambda: run_simulation(world, root))
+    print("Opening final statistics summary...")
+    show_final_summary(world, eval_stats, bfs_length, final_policy_steps, eval_trials, params, lambda: run_simulation(world, root, previous_params=params))
 
 
 def main():

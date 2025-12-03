@@ -20,17 +20,29 @@ An interactive gridworld environment for experimenting with tabular Q-learning r
 ## Project Structure
 
 ```
-temporal_difference_learning/
-├── env.py                  # GridEnvironment class (transitions, rewards, BFS)
-├── agent.py                # RLAgent class (Q-learning algorithm)
-├── ui.py                   # GUI components (grid builder, visualizations)
-├── Gridworld_Qlearning.py  # Main entry point
-├── tests/                  # Unit tests
+gridworld-qlearning-td/
+├── src/                       # Source code
+│   ├── __init__.py
+│   ├── agent.py              # RLAgent class (Q-learning algorithm)
+│   ├── config.py             # Configuration constants
+│   ├── env.py                # GridEnvironment class (transitions, rewards, BFS)
+│   ├── Gridworld_Qlearning.py # Main simulation orchestrator
+│   ├── maze_generators.py    # Maze generation algorithms
+│   ├── ui.py                 # GUI components (grid builder, visualizations)
+│   └── utils.py              # Utility functions (image caching, calculations)
+├── tests/                    # Unit tests
 │   ├── test_gridworld.py
-│   └── test_more.py
-├── requirements.txt        # Python dependencies
-├── pyproject.toml         # Package metadata
-├── .github/workflows/     # CI configuration
+│   ├── test_more.py
+│   └── test_refactoring.py
+├── assets/                   # Images and resources
+│   └── mouse_icon.png
+├── docs/                     # Documentation
+│   ├── REFACTORING_ANALYSIS.md
+│   └── TEST_RESULTS.md
+├── .github/workflows/        # CI configuration
+├── main.py                   # Entry point script
+├── requirements.txt          # Python dependencies
+├── .gitignore
 └── README.md
 ```
 
@@ -72,7 +84,12 @@ temporal_difference_learning/
 ### Running the Simulation
 
 ```bash
-python Gridworld_Qlearning.py
+python main.py
+```
+
+Or directly:
+```bash
+python src/Gridworld_Qlearning.py
 ```
 
 ### Workflow
@@ -647,10 +664,14 @@ PYTHONPATH=$PWD pytest -v
 
 ### Code Organization
 
-- **`env.py`**: Environment dynamics, transition function, reward calculation, BFS pathfinding
-- **`agent.py`**: Q-learning algorithm, training loop, policy extraction, evaluation
-- **`ui.py`**: Tkinter GUI components, Matplotlib visualizations, modal windows
-- **`Gridworld_Qlearning.py`**: Application orchestration and workflow
+- **`src/env.py`**: Environment dynamics, transition function, reward calculation, BFS pathfinding
+- **`src/agent.py`**: Q-learning algorithm, training loop, policy extraction, evaluation
+- **`src/ui.py`**: Tkinter GUI components, Matplotlib visualizations, modal windows
+- **`src/config.py`**: Centralized configuration (paths, colors, speeds, defaults)
+- **`src/maze_generators.py`**: Five maze generation algorithms with registry pattern
+- **`src/utils.py`**: Image caching, direction calculations, canvas utilities
+- **`src/Gridworld_Qlearning.py`**: Application orchestration and workflow
+- **`main.py`**: Entry point script
 
 ### Adding Features
 

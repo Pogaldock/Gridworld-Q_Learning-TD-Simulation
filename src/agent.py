@@ -58,7 +58,7 @@ class RLAgent:
             state = next_state
         return path
 
-    def train(self, episodes: int = 1000, record_eps: Optional[List[int]] = None, progress_callback=None):
+    def train(self, episodes: int = 1000, record_eps: Optional[List[int]] = None, progress_callback=None, record_all: bool = False):
         if self.seed is not None:
             np.random.seed(self.seed)
 
@@ -68,6 +68,7 @@ class RLAgent:
             record_eps = [1, 2, 3, 4, 5, max(1, episodes - 1)]
         record_indices = [max(0, e - 1) for e in record_eps]
         recorded_paths: Dict[int, List[Tuple[int, int]]] = {}
+        epsilon_values: Dict[int, float] = {}
 
         for ep in range(episodes):
             # linear decay
@@ -76,8 +77,12 @@ class RLAgent:
             else:
                 eps = self.epsilon_start
             p = self.run_episode(start, eps)
-            if ep in record_indices:
+            
+            # Record if requested
+            if record_all or ep in record_indices:
                 recorded_paths[ep + 1] = p
+                epsilon_values[ep + 1] = eps
+            
             # notify progress (ep number is 0-based; report 1-based count)
             try:
                 if progress_callback is not None:
@@ -86,7 +91,7 @@ class RLAgent:
                 # don't fail training if UI callback misbehaves
                 pass
 
-        return self.q, self.actions, states, recorded_paths
+        return self.q, self.actions, states, recorded_paths, epsilon_values
 
     def greedy_rollout(self, start: Tuple[int, int]) -> List[Tuple[int, int]]:
         state = start
